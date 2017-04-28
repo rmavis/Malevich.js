@@ -1,20 +1,4 @@
-/*
-  let GFD = greatest frame dimension
-  let ME = maximum number of elements
-
-  Steps:
-  1. pick a random shape (circle, square)
-  2. pick a random size (for circles, up to a ~quarter of the greatest frame dimension (GFD), for squares, up to GFD less some)
-  3. if size is greater than ~50% of GFD, divide ME by 2
-  4. decrement ME by 1
-  5. while ME > 0, repeat steps 1-4
-  6. pick a random color for the background
-  7. pick a random non-background color for each element
-  8. add each element to the background at random locations
-*/
-
 function Malevich(args) {
-
 
     /*
      * Init & config.
@@ -24,10 +8,11 @@ function Malevich(args) {
 
     var $frame_pad = 10;
 
+    var $min_elems = 3;
     var $max_elems = 10;
 
-    var $max_dim = 100;
     var $min_dim = 5;
+    var $max_dim = 100;
 
     var $dim_unit_x = 'vw';
     var $dim_unit_y = 'vh';
@@ -81,15 +66,15 @@ function Malevich(args) {
 
 
     function init(args) {
-        var max_elems = (args.max_elems || $max_elems),
+        var min_elems = (args.min_elems || $min_elems),
+            max_elems = (args.max_elems || $max_elems),
             frame = (args.frame || $frame);
 
-        var shapes = makeShapes(max_elems),
+        var points = getPoints(getRandomInt(min_elems, max_elems)),
+            shapes = makeShapes(points),
             colors = getColors(shapes.length);
 
         shapes = giveShapesColors(shapes, colors.fgs);
-        shapes = giveShapesPositions(shapes);
-
         var elems = makeElements(shapes);
 
         frame.style.backgroundColor = colors.bg;
@@ -98,58 +83,54 @@ function Malevich(args) {
 
 
 
+
+
     /*
      * Shape functions.
      */
 
-    function makeSquare() {
-        var shape = makeShape(),
-            dim = getRandomInt($min_dim, ($max_dim - ($frame_pad * 2)));
+    function getPoints(n) {
+        var points = [ ],
+            min = ($frame_pad + $min_dim),
+            max = (100 - $frame_pad - $min_dim);
 
-        shape.width = dim + $dim_unit_x;
-        shape.height = dim + $dim_unit_x;
+        for (var o = 0; o < n; o++) {
+            var center = {
+                x: getRandomInt(min, max),
+                y: getRandomInt(min, max)
+            };
 
-        return shape;
+            var max_x = ((max - center.x) < $min_dim) ? $min_dim : (max - center.x),
+                max_y = ((max - center.y) < $min_dim) ? $min_dim : (max - center.y);
+
+            var dims = {
+                w: getRandomInt($min_dim, max_x),
+                h: getRandomInt($min_dim, max_y),
+            };
+
+            points.push({
+                center: center,
+                dims: dims
+            });
+        }
+
+        return points;
     }
 
-
-
-    function makeRectangle() {
-        var shape = makeShape();
-
-        shape.width = getRandomInt($min_dim, ($max_dim - ($frame_pad * 2))) + $dim_unit_x;
-        shape.height = getRandomInt($min_dim, ($max_dim - ($frame_pad * 2))) + $dim_unit_y;
-
-        return shape;
-    }
+    // http://math.stackexchange.com/questions/270194/how-to-find-the-vertices-angle-after-rotation
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/sin
+    // function getRotatedPoints(shape) {
+    // }
 
 
 
-    function makeCircle() {
-        var shape = makeSquare();
-
-        shape.borderRadius = shape.height;
-        shape.borderWidth = '1px';
-
-        return shape;
-    }
-
-
-
-    function makeShapes(max) {
-        max = (max || $max_elems);
-
+    function makeShapes(points) {
         var shapes = [ ];
 
-        for (var o = 0; o < max; o++) {
-            var shape = $shapes[getRandomInt(0, $shapes.length)]();
+        for (var o = 0; o < points.length; o++) {
+            var func = $shapes[getRandomInt(0, ($shapes.length - 1))],
+                shape = func(points[o]);
             shapes.push(shape);
-
-            if (Math.max(shape.width, shape.height) > 50) {
-                max = Math.floor(max / 2);
-            }
-
-            max -= 1;
         }
 
         return shapes;
@@ -157,7 +138,7 @@ function Malevich(args) {
 
 
 
-    function makeShape() {
+    function getShapeElemAttributes() {
         return {
             position: 'absolute',
             top: 0,
@@ -174,33 +155,54 @@ function Malevich(args) {
 
 
 
-    function giveShapesColors(shapes, colors) {
-        for (var o = 0, m = shapes.length; o < m; o++) {
-            shapes[o].backgroundColor = colors[o];
-        }
+    function makeSquare(point) {
+        var shape = getShapeElemAttributes();
+        var dim = (Math.random() < 0.5) ? point.dims.w : point.dims.h;
+        var unit = (Math.random() < 0.5) ? $dim_unit_x : $dim_unit_y;
 
-        return shapes;
+        shape.width = dim + unit;
+        shape.height = dim + unit;
+
+        shape.left = (point.center.x - (dim / 2)) + $dim_unit_x;
+        shape.top = (point.center.y - (dim / 2)) + $dim_unit_y;
+
+        shape.transform = 'rotate('+getRandomInt(0, 90)+'deg)';
+
+        return shape;
     }
 
 
 
-    function giveShapesPositions(shapes) {
+    function makeRectangle(point) {
+        var shape = getShapeElemAttributes();
+
+        shape.width = point.dims.w + $dim_unit_x;
+        shape.height = point.dims.h + $dim_unit_y;
+
+        shape.left = (point.center.x - (point.dims.w / 2)) + $dim_unit_x;
+        shape.top = (point.center.y - (point.dims.h / 2)) + $dim_unit_y;
+
+        shape.transform = 'rotate('+getRandomInt(0, 90)+'deg)';
+
+        return shape;
+    }
+
+
+
+    function makeCircle(point) {
+        var shape = makeSquare(point);
+
+        shape.borderRadius = shape.height;
+        shape.borderWidth = '1px';
+
+        return shape;
+    }
+
+
+
+    function giveShapesColors(shapes, colors) {
         for (var o = 0, m = shapes.length; o < m; o++) {
-            shapes[o].top = getRandomInt(
-                $frame_pad,
-                Math.max(
-                    (100 - $frame_pad - parseInt(shapes[o].height)),
-                    $frame_pad
-                )
-            ) + $dim_unit_y;
-            shapes[o].left = getRandomInt(
-                $frame_pad,
-                Math.max(
-                    (100 - $frame_pad - parseInt(shapes[o].width)),
-                    $frame_pad
-                )
-            ) + $dim_unit_x;
-            console.log(shapes[o].top + ', ' + shapes[o].left);
+            shapes[o].backgroundColor = colors[o];
         }
 
         return shapes;
@@ -215,8 +217,8 @@ function Malevich(args) {
      */
 
     function getColors(n) {
-        var color = $colors[getRandomInt(0, $colors.length)],
-            variant = color.variants[getRandomInt(0, color.variants.length)],
+        var color = $colors[getRandomInt(0, ($colors.length - 1))],
+            variant = color.variants[getRandomInt(0, (color.variants.length - 1))],
             fgs = [ ];
 
         // console.log(variant);
@@ -281,7 +283,7 @@ function Malevich(args) {
         for (var o = 0, m = shapes.length; o < m; o++) {
             var elem = document.createElement('div');
 
-            for (key in shapes[o]) {
+            for (var key in shapes[o]) {
                 elem.style[key] = shapes[o][key];
             }
 
@@ -310,11 +312,10 @@ function Malevich(args) {
      */
 
     // via https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/random
-    // max is not inclusive
     function getRandomInt(min, max) {
         min = Math.ceil(min);
         max = Math.floor(max);
-        return Math.floor(Math.random() * (max - min)) + min;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
 
